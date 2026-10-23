@@ -24,11 +24,11 @@ func (ent *Entry) Decode(r io.Reader) error {
 	//find the length of key and value => binary.LittleEndian.Uint32(b). Converts bytes to uint32
 	//then construct Entry struct: entry := Entry{key: data[8:8+len(key)], val: data[8+len(key):]}
 	//caller doesn't know how many bytes to allocate, so we use Read(). we know that the serialized data must have at least 8 bytes
-	//I would just give data as the argument instead of the reader...
+	//I would just give data as the argument instead of the reader... but I guess io.Reader is passed here for flexibility? to handle more data sources
 
 	data := make([]byte, 8)
 	read := 0
-	for read < len(data) {
+	for read < len(data) { // could also use io.ReadFull()
 		n, err := r.Read(data[read:]) //Read() reads UP TO len(header), so no guarantee that will read everything in one call
 		if err != nil {
 			return err

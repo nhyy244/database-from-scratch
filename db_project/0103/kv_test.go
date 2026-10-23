@@ -2,6 +2,7 @@ package db0103
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"testing"
 
@@ -70,6 +71,45 @@ func TestEntryEncode(t *testing.T) {
 	err = decoded.Decode(bytes.NewBuffer(data))
 	assert.Nil(t, err)
 	assert.Equal(t, ent, decoded)
+}
+func TestPlayground(t *testing.T) {
+	log := Log{}
+	log.FileName = "db_logs"
+	kv := KV{log: log}
+	kv.Open()
+	kv.Set([]byte("k1"), []byte("v1"))
+	kv.Set([]byte("k2"), []byte("v2"))
+	updated, err := kv.Set([]byte("k2"), []byte("v2"))
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("updated should be false: ", updated)
+	assert.False(t, updated)
+
+	val, _, _ := kv.Get([]byte("k1"))
+	fmt.Println("value of k1: ", string(val)) //need to automate the conversion from bytes
+
+	deleted, err := kv.Del([]byte("k1"))
+	fmt.Println("deleted should be true: ", deleted)
+	assert.True(t, deleted)
+	kv.Set([]byte("k3"), []byte("v3"))
+	fmt.Println("DB state before closing: ")
+	for k, v := range kv.mem {
+		fmt.Println(k, ":", v)
+	}
+	kv.Close()
+	updated, err = kv.Set([]byte("k2"), []byte("v3"))
+	if err != nil {
+		fmt.Println("DB is now closed. Should print error: ", err) //
+	}
+	kv2 := KV{log: log}
+	kv2.Open()
+	fmt.Println("DB after recovering state: ")
+	for k, v := range kv2.mem {
+		fmt.Println(k, ":", v)
+	}
+	kv2.Close()
+
 }
 
 // QzBQWVJJOUhU https://trialofcode.org/

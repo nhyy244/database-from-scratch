@@ -16,7 +16,7 @@ func (ent *Entry) Encode() []byte {
 	binary.LittleEndian.PutUint32(data[0:4], uint32(len(ent.key)))
 	copy(data[9:], ent.key)
 	if ent.deleted {
-		data[8] = 1
+		data[8] = 1 // don't serialize value if k is deleted.
 	} else {
 		binary.LittleEndian.PutUint32(data[4:8], uint32(len(ent.val)))
 		copy(data[9+len(ent.key):], ent.val)

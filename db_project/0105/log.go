@@ -1,6 +1,7 @@
 package db0105
 
 import (
+	"io"
 	"os"
 )
 
@@ -19,12 +20,23 @@ func (log *Log) Close() error {
 }
 
 func (log *Log) Write(ent *Entry) error {
-	if _, err := log.fp.Write(ent.Encode()); err != nil {
+	_, err := log.fp.Write(ent.Encode())
+	if err != nil {
 		return err
 	}
-	return log.fp.Sync() // fsync
+	return log.fp.Sync()
 }
 
-func (log *Log) Read(ent *Entry) (eof bool, err error)
+func (log *Log) Read(ent *Entry) (eof bool, err error) {
+	err = ent.Decode(log.fp)
+
+	if err == io.EOF || err == ErrBadSum || err == io.ErrUnexpectedEOF {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	} else {
+		return false, nil
+	}
+}
 
 // QzBQWVJJOUhU https://trialofcode.org/

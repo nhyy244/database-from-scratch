@@ -28,7 +28,7 @@ func (schema *Schema) NewRow() Row {
 
 func (row Row) EncodeKey(schema *Schema) (key []byte) {
 	key = append(key, []byte(schema.Table)...)
-	key = append(key, 0) //separator, idk why. tests take sep in consideration but nothing about it is mentioned in the book
+	key = append(key, 0x00)
 
 	for _, v := range schema.PKey {
 		key = row[v].Encode(key)

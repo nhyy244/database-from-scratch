@@ -1,5 +1,7 @@
 package db0203
 
+import "bytes"
+
 type KV struct {
 	log Log
 	mem map[string][]byte
@@ -44,7 +46,38 @@ const (
 	ModeUpdate UpdateMode = 2 // update existing
 )
 
-func (kv *KV) SetEx(key []byte, val []byte, mode UpdateMode) (updated bool, err error)
+func (kv *KV) SetEx(key []byte, val []byte, mode UpdateMode) (updated bool, err error) {
+	prev, exist := kv.mem[string(key)]
+	updated = !exist || !bytes.Equal(prev, val)
+	switch mode {
+	case ModeInsert:
+		if exist {
+			return false, nil
+		} else {
+			if err = kv.log.Write(&Entry{key: key, val: val}); err != nil {
+				return false, err
+			}
+			kv.mem[string(key)] = val
+		}
+	case ModeUpdate:
+		if !exist {
+			return false, nil
+		} else {
+			if err = kv.log.Write(&Entry{key: key, val: val}); err != nil {
+				return false, err
+			}
+			kv.mem[string(key)] = val
+		}
+	case ModeUpsert:
+		if updated {
+			if err = kv.log.Write(&Entry{key: key, val: val}); err != nil {
+				return false, err
+			}
+			kv.mem[string(key)] = val
+		}
+	}
+	return
+}
 
 func (kv *KV) Set(key []byte, val []byte) (updated bool, err error) {
 	return kv.SetEx(key, val, ModeUpsert)

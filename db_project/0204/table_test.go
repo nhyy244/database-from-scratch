@@ -10,7 +10,7 @@ import (
 func TestTableByPKey(t *testing.T) {
 	db := DB{}
 	db.KV.log.FileName = ".test_db"
-	defer os.Remove(db.KV.log.FileName)
+	//defer os.Remove(db.KV.log.FileName)
 
 	os.Remove(db.KV.log.FileName)
 	err := db.Open()

@@ -38,9 +38,22 @@ func (p *Parser) skipSpaces() {
 	}
 }
 
-func (p *Parser) tryKeyword(kw string) bool
+func (p *Parser) tryKeyword(kw string) bool {
+	return false
+}
 
-func (p *Parser) tryName() (string, bool)
+func (p *Parser) tryName() (string, bool) {
+	p.skipSpaces()
+	if !isNameStart(p.buf[p.pos]) {
+		return "", false
+	}
+	start := p.pos
+	for p.pos < len(p.buf) && isNameContinue(p.buf[p.pos]) {
+		p.pos += 1
+	}
+	return p.buf[start:p.pos], true
+
+}
 
 func (p *Parser) isEnd() bool {
 	p.skipSpaces()

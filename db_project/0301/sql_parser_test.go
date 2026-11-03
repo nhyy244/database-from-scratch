@@ -1,6 +1,7 @@
 package db0301
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,8 +10,10 @@ import (
 func TestParseName(t *testing.T) {
 	p := NewParser(" a b0 _0_ 123 ")
 	name, ok := p.tryName()
+	fmt.Println("pos: ", p.pos, "name: ", name, "ok: ", ok)
 	assert.True(t, ok && name == "a")
 	name, ok = p.tryName()
+	fmt.Println("pos: ", p.pos, "name: ", name, "ok: ", ok)
 	assert.True(t, ok && name == "b0")
 	name, ok = p.tryName()
 	assert.True(t, ok && name == "_0_")

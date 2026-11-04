@@ -30,4 +30,10 @@ func main() {
 	reader := bytes.NewBuffer(data)
 	n, _ := reader.Read(data[8:])
 	fmt.Println("n: ", n)
+
+	s := "hello"
+	for idx, ch := range s {
+		fmt.Println(idx)
+		fmt.Println(string(ch))
+	}
 }

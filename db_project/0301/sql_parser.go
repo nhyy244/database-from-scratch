@@ -39,7 +39,20 @@ func (p *Parser) skipSpaces() {
 }
 
 func (p *Parser) tryKeyword(kw string) bool {
-	return false
+	p.skipSpaces()
+	start := p.pos
+	for idx := range kw {
+		if p.pos >= len(p.buf) || p.buf[p.pos]|32 != kw[idx]|32 {
+			p.pos = start
+			return false
+		}
+		p.pos += 1
+	}
+	if p.pos < len(p.buf) && !isSeparator(p.buf[p.pos]) { //pos here has to be separator for it to be a keyword
+		p.pos = start
+		return false
+	}
+	return true
 }
 
 func (p *Parser) tryName() (string, bool) {

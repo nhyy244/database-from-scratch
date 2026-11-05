@@ -2,6 +2,7 @@ package db0302
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -84,9 +85,35 @@ func (p *Parser) parseValue(out *Cell) error {
 	}
 }
 
-func (p *Parser) parseString(out *Cell) error
+func (p *Parser) parseString(out *Cell) error {
+	return nil
+}
 
-func (p *Parser) parseInt(out *Cell) (err error)
+func (p *Parser) parseInt(out *Cell) (err error) {
+	start := p.pos
+	if !isDigit(p.buf[p.pos]) {
+		p.pos += 1
+		start = p.pos
+	}
+
+	for isDigit(p.buf[p.pos]) {
+		p.pos += 1
+	}
+
+	var n int64
+	for idx := range p.buf[start:p.pos] {
+		fmt.Println("idx: ", idx, int64(p.buf[start+idx]-'0'))
+		n = n*10 + int64(p.buf[start+idx]-'0')
+	}
+
+	out.Type = TypeI64
+	if p.buf[start-1] == '-' {
+		out.I64 = -n
+	} else {
+		out.I64 = n
+	}
+	return nil
+}
 
 func (p *Parser) isEnd() bool {
 	p.skipSpaces()

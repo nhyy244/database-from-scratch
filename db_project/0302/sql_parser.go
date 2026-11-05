@@ -86,6 +86,37 @@ func (p *Parser) parseValue(out *Cell) error {
 }
 
 func (p *Parser) parseString(out *Cell) error {
+	startQoutePos := p.pos
+	p.pos += 1 //points to first char
+	s := ""
+	for p.pos < len(p.buf) {
+		if p.buf[p.pos] == p.buf[startQoutePos] { //reached the end
+			p.pos += 1
+			break
+		}
+		if p.buf[p.pos] == '\\' { // escaped characters
+			p.pos += 1
+			switch p.buf[p.pos] {
+			case '\'':
+				s += "'"
+				p.pos += 1
+				continue
+			case '"':
+				s += "\""
+				p.pos += 1
+				continue
+			case '\\':
+				s += "\\"
+				p.pos += 1
+				continue
+			}
+		}
+		s += string(p.buf[p.pos])
+		p.pos += 1
+	}
+	out.Type = TypeStr
+	out.Str = []byte(s)
+
 	return nil
 }
 

@@ -31,7 +31,7 @@ func main() {
 	n, _ := reader.Read(data[8:])
 	fmt.Println("n: ", n)
 
-	s := "hello"
+	s := "hell\"o"
 	for idx, ch := range s {
 		fmt.Println(idx)
 		fmt.Println(string(ch))

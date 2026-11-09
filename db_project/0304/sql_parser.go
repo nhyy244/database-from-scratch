@@ -2,6 +2,7 @@ package db0304
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -227,13 +228,65 @@ func (p *Parser) parseWhere(out *[]NamedCell) error {
 	return nil
 }
 
-func (p *Parser) parseCreateTable(out *StmtCreatTable) error
+func (p *Parser) parseCreateTable(out *StmtCreatTable) error {
+	for !p.tryPunctuation(";") {
+		if tableName, ok := p.tryName(); !ok {
+			return fmt.Errorf("%s not supported as table name", tableName)
+		} else {
+			out.table = tableName
+		}
+		if !p.tryPunctuation("(") {
+			return fmt.Errorf("table should be defined in parantheses")
+		}
+		for !p.tryPunctuation(")") {
+			if len(out.cols) > 0 && !p.tryPunctuation(",") {
+				return errors.New("expect comma")
+			}
+			if p.tryKeyword("PRIMARY", "KEY") {
+				if !p.tryPunctuation("(") {
+					return fmt.Errorf("primary key should be defined in parantheses")
+				}
+				for !p.tryPunctuation(")") {
+					if len(out.pkey) > 0 && !p.tryPunctuation(",") {
+						return errors.New("expect comma")
+					}
+					if keyName, ok := p.tryName(); !ok {
+						return fmt.Errorf("%s not supported as primary key column", keyName)
+					} else {
+						out.pkey = append(out.pkey, keyName)
+					}
+				}
+				continue
+			}
+			if colName, ok := p.tryName(); !ok {
+				return fmt.Errorf("%s not supported as column name", colName)
+			} else {
+				typeName, _ := p.tryName()
+				switch typeName {
+				case "string":
+					out.cols = append(out.cols, Column{Name: colName, Type: TypeStr})
+				case "int64":
+					out.cols = append(out.cols, Column{Name: colName, Type: TypeI64})
+				default:
+					return fmt.Errorf("%s type not supported", typeName)
+				}
+			}
+		}
+	}
+	return nil
+}
 
-func (p *Parser) parseInsert(out *StmtInsert) error
+func (p *Parser) parseInsert(out *StmtInsert) error {
+	return nil
+}
 
-func (p *Parser) parseUpdate(out *StmtUpdate) error
+func (p *Parser) parseUpdate(out *StmtUpdate) error {
+	return nil
+}
 
-func (p *Parser) parseDelete(out *StmtDelete) error
+func (p *Parser) parseDelete(out *StmtDelete) error {
+	return nil
+}
 
 func (p *Parser) parseStmt() (out interface{}, err error) {
 	if p.tryKeyword("SELECT") {

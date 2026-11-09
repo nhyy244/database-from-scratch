@@ -277,15 +277,65 @@ func (p *Parser) parseCreateTable(out *StmtCreatTable) error {
 }
 
 func (p *Parser) parseInsert(out *StmtInsert) error {
+	for !p.tryPunctuation(";") {
+		if tableName, ok := p.tryName(); !ok {
+			return errors.New("expected table name")
+		} else {
+			out.table = tableName
+		}
+		if ok := p.tryKeyword("VALUES"); !ok {
+			return errors.New("expected VALUES")
+		}
+		if !p.tryPunctuation("(") {
+			return errors.New("expected (")
+		}
+		for {
+			var cell Cell
+			if err := p.parseValue(&cell); err != nil {
+				return err
+			}
+			out.value = append(out.value, cell)
+			if p.tryPunctuation(")") {
+				break
+			}
+			if !p.tryPunctuation(",") {
+				return errors.New("expected comma or )")
+			}
+		}
+	}
 	return nil
 }
 
 func (p *Parser) parseUpdate(out *StmtUpdate) error {
-	return nil
+	if tableName, ok := p.tryName(); !ok {
+		return errors.New("expected table name")
+	} else {
+		out.table = tableName
+	}
+
+	if !p.tryKeyword("SET") {
+		return errors.New("expected SET")
+	}
+	for {
+		var value NamedCell
+		if err := p.parseEqual(&value); err != nil {
+			return err
+		}
+		out.value = append(out.value, value)
+		if !p.tryPunctuation(",") {
+			break
+		}
+	}
+	return p.parseWhere(&out.keys)
 }
 
 func (p *Parser) parseDelete(out *StmtDelete) error {
-	return nil
+	tableName, ok := p.tryName()
+	if !ok {
+		return errors.New("expected table name")
+	}
+	out.table = tableName
+	return p.parseWhere(&out.keys)
 }
 
 func (p *Parser) parseStmt() (out interface{}, err error) {

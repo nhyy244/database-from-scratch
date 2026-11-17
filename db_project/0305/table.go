@@ -3,6 +3,8 @@ package db0305
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 )
 
 type DB struct {
@@ -54,12 +56,12 @@ func (db *DB) Delete(schema *Schema, row Row) (deleted bool, err error) {
 
 type SQLResult struct {
 	Updated int
-	Header  []string
+	Header  []string //named attributes - columns
 	Values  []Row
 }
 
 func (db *DB) ExecStmt(stmt interface{}) (r SQLResult, err error) {
-	switch ptr := stmt.(type) {
+	switch ptr := stmt.(type) { //type switch
 	case *StmtCreatTable:
 		err = db.execCreateTable(ptr)
 	case *StmtSelect:
@@ -77,7 +79,27 @@ func (db *DB) ExecStmt(stmt interface{}) (r SQLResult, err error) {
 	return
 }
 
-func (db *DB) execCreateTable(stmt *StmtCreatTable) (err error)
+func (db *DB) execCreateTable(stmt *StmtCreatTable) (err error) {
+	pkeys := []int{}
+
+	for _, key := range stmt.pkey {
+		idx := slices.IndexFunc(stmt.cols, func(c Column) bool { return c.Name == key })
+		if idx < 0 {
+			return fmt.Errorf("row should have at least one primary key")
+		}
+		pkeys = append(pkeys, idx)
+	}
+	schema := Schema{Table: stmt.table, Cols: stmt.cols, PKey: pkeys}
+	val, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+	if _, err = db.KV.SetEx([]byte("@schema_"+stmt.table), val, ModeUpsert); err != nil {
+		return err
+	}
+	db.tables[stmt.table] = schema
+	return nil
+}
 
 func (db *DB) GetSchema(table string) (Schema, error) {
 	schema, ok := db.tables[table]
@@ -97,12 +119,165 @@ func (db *DB) GetSchema(table string) (Schema, error) {
 	return schema, nil
 }
 
-func (db *DB) execSelect(stmt *StmtSelect) ([]Row, error)
+func (db *DB) execSelect(stmt *StmtSelect) ([]Row, error) {
+	schema, err := db.GetSchema(stmt.table)
+	if err != nil {
+		return nil, fmt.Errorf("expected correct table name. Table %s not found", stmt.table)
+	}
+	pKeys := []string{}
+	for _, val := range schema.PKey {
+		pKeys = append(pKeys, schema.Cols[val].Name)
+	}
+	for _, val := range stmt.keys {
+		if !slices.Contains(pKeys, val.column) {
+			return nil, fmt.Errorf("%s not a primary key", val.column)
+		}
+	}
+	row := schema.NewRow()
+	for _, key := range stmt.keys {
+		idx := slices.IndexFunc(schema.Cols, func(c Column) bool { return c.Name == key.column })
+		if idx < 0 {
+			return nil, fmt.Errorf("column %s not found in table %s", key.column, stmt.table)
+		}
+		if key.value.Type != schema.Cols[idx].Type {
+			return nil, fmt.Errorf("type mismatch for column %s", key.column)
+		}
+		row[idx] = key.value
+	}
+	for _, idx := range schema.PKey {
+		if row[idx].Type == 0 {
+			return nil, fmt.Errorf("missing value for primary key column %s", schema.Cols[idx].Name)
+		}
+	}
+	ok, err := db.Select(&schema, row)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []Row{}, nil
+	}
+	result := make(Row, 0, len(stmt.cols))
+	for _, name := range stmt.cols {
+		idx := slices.IndexFunc(schema.Cols, func(c Column) bool { return c.Name == name })
+		if idx < 0 {
+			return nil, fmt.Errorf("column %s not found in table %s", name, stmt.table)
+		}
+		result = append(result, row[idx])
+	}
+	return []Row{result}, nil
+}
 
-func (db *DB) execInsert(stmt *StmtInsert) (count int, err error)
+func (db *DB) execInsert(stmt *StmtInsert) (count int, err error) {
+	if schema, err := db.GetSchema(stmt.table); err != nil {
+		return 0, fmt.Errorf("expected correct table name. Table %s not found", stmt.table)
+	} else {
+		row := Row(stmt.value)
+		_, err := db.Insert(&schema, row)
+		if err != nil {
+			return 0, nil
+		}
+		return 1, nil // count is amount of rows affected?
+	}
+}
 
-func (db *DB) execUpdate(stmt *StmtUpdate) (count int, err error)
+func (db *DB) execUpdate(stmt *StmtUpdate) (count int, err error) {
+	schema, err := db.GetSchema(stmt.table)
+	if err != nil {
+		return 0, fmt.Errorf("expected correct table name. Table %s not found", stmt.table)
+	}
+	pKeys := []string{}
+	for _, val := range schema.PKey {
+		pKeys = append(pKeys, schema.Cols[val].Name)
+	}
+	for _, val := range stmt.keys {
+		if !slices.Contains(pKeys, val.column) {
+			return 0, fmt.Errorf("%s not a primary key", val.column)
+		}
+	}
+	row := schema.NewRow()
+	for _, key := range stmt.keys {
+		idx := slices.IndexFunc(schema.Cols, func(c Column) bool { return c.Name == key.column })
+		if idx < 0 {
+			return 0, fmt.Errorf("column %s not found in table %s", key.column, stmt.table)
+		}
+		if key.value.Type != schema.Cols[idx].Type {
+			return 0, fmt.Errorf("type mismatch for column %s", key.column)
+		}
+		row[idx] = key.value
+	}
+	for _, idx := range schema.PKey {
+		if row[idx].Type == 0 {
+			return 0, fmt.Errorf("missing value for primary key column %s", schema.Cols[idx].Name)
+		}
+	}
+	ok, err := db.Select(&schema, row)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	for _, assign := range stmt.value {
+		idx := slices.IndexFunc(schema.Cols, func(c Column) bool { return c.Name == assign.column })
+		if idx < 0 {
+			return 0, fmt.Errorf("column %s not found in table %s", assign.column, stmt.table)
+		}
+		if slices.Contains(schema.PKey, idx) {
+			return 0, fmt.Errorf("cannot update primary key column %s", assign.column)
+		}
+		if assign.value.Type != schema.Cols[idx].Type {
+			return 0, fmt.Errorf("type mismatch for column %s", assign.column)
+		}
+		row[idx] = assign.value
+	}
+	ok, err = db.Update(&schema, row)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	return 1, nil
+}
 
-func (db *DB) execDelete(stmt *StmtDelete) (count int, err error)
+func (db *DB) execDelete(stmt *StmtDelete) (count int, err error) {
+	schema, err := db.GetSchema(stmt.table)
+	if err != nil {
+		return 0, fmt.Errorf("expected correct table name. Table %s not found", stmt.table)
+	}
+	pKeys := []string{}
+	for _, val := range schema.PKey {
+		pKeys = append(pKeys, schema.Cols[val].Name)
+	}
+	for _, val := range stmt.keys {
+		if !slices.Contains(pKeys, val.column) {
+			return 0, fmt.Errorf("%s not a primary key", val.column)
+		}
+	}
+	row := schema.NewRow()
+	for _, key := range stmt.keys {
+		idx := slices.IndexFunc(schema.Cols, func(c Column) bool { return c.Name == key.column })
+		if idx < 0 {
+			return 0, fmt.Errorf("column %s not found in table %s", key.column, stmt.table)
+		}
+		if key.value.Type != schema.Cols[idx].Type {
+			return 0, fmt.Errorf("type mismatch for column %s", key.column)
+		}
+		row[idx] = key.value
+	}
+	for _, idx := range schema.PKey {
+		if row[idx].Type == 0 {
+			return 0, fmt.Errorf("missing value for primary key column %s", schema.Cols[idx].Name)
+		}
+	}
+	ok, err := db.Delete(&schema, row)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	return 1, nil
+}
 
 // QzBQWVJJOUhU https://trialofcode.org/

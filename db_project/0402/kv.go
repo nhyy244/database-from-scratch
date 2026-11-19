@@ -110,18 +110,37 @@ type KVIterator struct {
 	pos  int
 }
 
-func (kv *KV) Seek(key []byte) (*KVIterator, error)
-
-func (iter *KVIterator) Valid() bool {
-	return 0 <= iter.pos && iter.pos < len(iter.keys)
+func (kv *KV) Seek(key []byte) (*KVIterator, error) {
+	idx, _ := slices.BinarySearchFunc(kv.keys, key, bytes.Compare)
+	return &KVIterator{keys: kv.keys, vals: kv.vals, pos: idx}, nil
 }
 
-func (iter *KVIterator) Key() []byte
+func (iter *KVIterator) Valid() bool {
+	return 0 <= iter.pos && iter.pos < len(iter.keys) //Invalid it pos is either -1 or len(keys). Seek() returns either the idx of the target or the idx of where the target should live in the array, and that can be len(keys) if target is greater than all the keys
+}
 
-func (iter *KVIterator) Val() []byte
+func (iter *KVIterator) Key() []byte {
+	return iter.keys[iter.pos]
+}
 
-func (iter *KVIterator) Next() error
+func (iter *KVIterator) Val() []byte {
+	return iter.vals[iter.pos]
+}
 
-func (iter *KVIterator) Prev() error
+func (iter *KVIterator) Next() error {
+	if !(iter.pos < len(iter.keys)) {
+		return nil //some error
+	}
+	iter.pos++
+	return nil
+}
+
+func (iter *KVIterator) Prev() error {
+	if !(iter.pos > -1) {
+		return nil //some error
+	}
+	iter.pos--
+	return nil
+}
 
 // QzBQWVJJOUhU https://trialofcode.org/

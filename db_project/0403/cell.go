@@ -54,12 +54,67 @@ func (cell *Cell) DecodeVal(data []byte) (rest []byte, err error) {
 	}
 }
 
-func encodeStrKey(toAppend []byte, input []byte) []byte
+func encodeStrKey(toAppend []byte, input []byte) []byte {
+	for _, ch := range input {
+		if ch == 0x00 || ch == 0x01 {
+			toAppend = append(toAppend, 0x01, ch+1)
+		} else {
+			toAppend = append(toAppend, ch)
+		}
+	}
+	return append(toAppend, 0x00)
+}
+func decodeStrKey(data []byte) (out []byte, rest []byte, err error) {
+	for idx := 0; idx < len(data); idx++ {
+		ch := data[idx]
+		switch ch {
+		case 0x00:
+			// terminator
+			return out, data[idx+1:], nil
+		case 0x01:
+			// escaped 0x00 or 0x01: the next byte is the original byte + 1
+			if idx+1 >= len(data) {
+				return nil, data, errors.New("expected more data")
+			}
+			esc := data[idx+1]
+			if esc != 0x01 && esc != 0x02 {
+				return nil, data, errors.New("invalid escape sequence in string key")
+			}
+			out = append(out, esc-1)
+			idx++
+		default:
+			out = append(out, ch)
+		}
+	}
+	return nil, data, errors.New("missing string key terminator")
+}
 
-func decodeStrKey(data []byte) (out []byte, rest []byte, err error)
+func (cell *Cell) EncodeKey(toAppend []byte) []byte {
+	switch cell.Type {
+	case TypeI64:
+		return binary.BigEndian.AppendUint64(toAppend, uint64(cell.I64)^(1<<63))
+	case TypeStr:
+		return encodeStrKey(toAppend, cell.Str)
+	default:
+		panic("unreachable")
+	}
+}
 
-func (cell *Cell) EncodeKey(toAppend []byte) []byte
-
-func (cell *Cell) DecodeKey(data []byte) (rest []byte, err error)
+func (cell *Cell) DecodeKey(data []byte) (rest []byte, err error) {
+	switch cell.Type {
+	case TypeI64:
+		if len(data) < 8 {
+			return data, errors.New("Expected more data lolz")
+		}
+		var key int64 = int64(binary.BigEndian.Uint64(data[0:8]) ^ (1 << 63))
+		cell.I64 = key
+		return data[8:], nil
+	case TypeStr:
+		cell.Str, rest, err = decodeStrKey(data)
+		return rest, err
+	default:
+		panic("unreachable")
+	}
+}
 
 // QzBQWVJJOUhU https://trialofcode.org/
